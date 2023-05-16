@@ -23,8 +23,8 @@ import warnings
 import psutil
 from psutil import WINDOWS
 from psutil._compat import FileNotFoundError
-from psutil._compat import which
 from psutil._compat import super
+from psutil._compat import which
 from psutil.tests import APPVEYOR
 from psutil.tests import GITHUB_ACTIONS
 from psutil.tests import HAS_BATTERY
@@ -161,6 +161,27 @@ class TestSystemAPIs(WindowsTestCase):
         self.assertAlmostEqual(
             int(w.AvailableBytes), psutil.virtual_memory().free,
             delta=TOLERANCE_SYS_MEM)
+
+    def test_total_swapmem(self):
+        w = wmi.WMI().Win32_PerfRawData_PerfOS_Memory()[0]
+        self.assertEqual(int(w.CommitLimit) - psutil.virtual_memory().total,
+                         psutil.swap_memory().total)
+        if (psutil.swap_memory().total == 0):
+            self.assertEqual(0, psutil.swap_memory().free)
+            self.assertEqual(0, psutil.swap_memory().used)
+
+    def test_percent_swapmem(self):
+        if (psutil.swap_memory().total > 0):
+            w = wmi.WMI().Win32_PerfRawData_PerfOS_PagingFile(
+                Name="_Total")[0]
+            # calculate swap usage to percent
+            percentSwap = int(w.PercentUsage) * 100 / int(w.PercentUsage_Base)
+            # exact percent may change but should be reasonable
+            # assert within +/- 5% and between 0 and 100%
+            self.assertGreaterEqual(psutil.swap_memory().percent, 0)
+            self.assertAlmostEqual(psutil.swap_memory().percent, percentSwap,
+                                   delta=5)
+            self.assertLessEqual(psutil.swap_memory().percent, 100)
 
     # @unittest.skipIf(wmi is None, "wmi module is not installed")
     # def test__UPTIME(self):

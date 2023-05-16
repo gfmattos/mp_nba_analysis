@@ -52,6 +52,7 @@ from psutil.tests import HAS_THREADS
 from psutil.tests import MACOS_11PLUS
 from psutil.tests import PYPY
 from psutil.tests import PYTHON_EXE
+from psutil.tests import PYTHON_EXE_ENV
 from psutil.tests import PsutilTestCase
 from psutil.tests import ThreadTask
 from psutil.tests import call_until
@@ -158,6 +159,7 @@ class TestProcess(PsutilTestCase):
         self.assertEqual(code, 5)
         self.assertProcessGone(p)
 
+    @unittest.skipIf(NETBSD, "fails on NETBSD")
     def test_wait_stopped(self):
         p = self.spawn_psproc()
         if POSIX:
@@ -230,7 +232,7 @@ class TestProcess(PsutilTestCase):
         p = psutil.Process()
         p.cpu_percent(interval=0.001)
         p.cpu_percent(interval=0.001)
-        for x in range(100):
+        for _ in range(100):
             percent = p.cpu_percent(interval=None)
             self.assertIsInstance(percent, float)
             self.assertGreaterEqual(percent, 0.0)
@@ -610,8 +612,7 @@ class TestProcess(PsutilTestCase):
     def test_memory_maps(self):
         p = psutil.Process()
         maps = p.memory_maps()
-        paths = [x for x in maps]
-        self.assertEqual(len(paths), len(set(paths)))
+        self.assertEqual(len(maps), len(set(maps)))
         ext_maps = p.memory_maps(grouped=False)
 
         for nt in maps:
@@ -732,7 +733,15 @@ class TestProcess(PsutilTestCase):
         create_exe(testfn)
         cmdline = [testfn] + (["0123456789"] * 20)
         p = self.spawn_psproc(cmdline)
-        self.assertEqual(p.cmdline(), cmdline)
+        if OPENBSD:
+            # XXX: for some reason the test process may turn into a
+            # zombie (don't know why).
+            try:
+                self.assertEqual(p.cmdline(), cmdline)
+            except psutil.ZombieProcess:
+                raise self.skipTest("OPENBSD: process turned into zombie")
+        else:
+            self.assertEqual(p.cmdline(), cmdline)
 
     def test_name(self):
         p = self.spawn_psproc(PYTHON_EXE)
@@ -745,7 +754,23 @@ class TestProcess(PsutilTestCase):
         testfn = self.get_testfn(suffix="0123456789" * 2)
         create_exe(testfn)
         p = self.spawn_psproc(testfn)
-        self.assertEqual(p.name(), os.path.basename(testfn))
+        if OPENBSD:
+            # XXX: for some reason the test process may turn into a
+            # zombie (don't know why). Because the name() is long, all
+            # UNIX kernels truncate it to 15 chars, so internally psutil
+            # tries to guess the full name() from the cmdline(). But the
+            # cmdline() of a zombie on OpenBSD fails (internally), so we
+            # just compare the first 15 chars. Full explanation:
+            # https://github.com/giampaolo/psutil/issues/2239
+            try:
+                self.assertEqual(p.name(), os.path.basename(testfn))
+            except AssertionError:
+                if p.status() == psutil.STATUS_ZOMBIE:
+                    assert os.path.basename(testfn).startswith(p.name())
+                else:
+                    raise
+        else:
+            self.assertEqual(p.name(), os.path.basename(testfn))
 
     # XXX
     @unittest.skipIf(SUNOS, "broken on SUNOS")
@@ -1034,7 +1059,7 @@ class TestProcess(PsutilTestCase):
     def test_num_ctx_switches(self):
         p = psutil.Process()
         before = sum(p.num_ctx_switches())
-        for x in range(500000):
+        for _ in range(500000):
             after = sum(p.num_ctx_switches())
             if after > before:
                 return
@@ -1146,7 +1171,7 @@ class TestProcess(PsutilTestCase):
     def test_suspend_resume(self):
         p = self.spawn_psproc()
         p.suspend()
-        for x in range(100):
+        for _ in range(100):
             if p.status() == psutil.STATUS_STOPPED:
                 break
             time.sleep(0.01)
@@ -1543,7 +1568,7 @@ class TestPopen(PsutilTestCase):
         # Not sure what to do though.
         cmd = [PYTHON_EXE, "-c", "import time; time.sleep(60);"]
         with psutil.Popen(cmd, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE) as proc:
+                          stderr=subprocess.PIPE, env=PYTHON_EXE_ENV) as proc:
             proc.name()
             proc.cpu_times()
             proc.stdin
@@ -1559,7 +1584,7 @@ class TestPopen(PsutilTestCase):
         with psutil.Popen([PYTHON_EXE, "-V"],
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
-                          stdin=subprocess.PIPE) as proc:
+                          stdin=subprocess.PIPE, env=PYTHON_EXE_ENV) as proc:
             proc.communicate()
         assert proc.stdout.closed
         assert proc.stderr.closed
@@ -1572,7 +1597,7 @@ class TestPopen(PsutilTestCase):
         # diverges from that.
         cmd = [PYTHON_EXE, "-c", "import time; time.sleep(60);"]
         with psutil.Popen(cmd, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE) as proc:
+                          stderr=subprocess.PIPE, env=PYTHON_EXE_ENV) as proc:
             proc.terminate()
             proc.wait()
             self.assertRaises(psutil.NoSuchProcess, proc.terminate)

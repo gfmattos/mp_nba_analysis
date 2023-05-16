@@ -37,6 +37,7 @@ from IPython.core.magic import (
     magics_class,
     needs_local_scope,
     no_var_expand,
+    output_can_be_silenced,
     on_off,
 )
 from IPython.testing.skipdoctest import skip_doctest
@@ -46,6 +47,7 @@ from IPython.utils.ipstruct import Struct
 from IPython.utils.module_paths import find_mod
 from IPython.utils.path import get_py_filename, shellglob
 from IPython.utils.timing import clock, clock2
+from IPython.core.displayhook import DisplayHook
 
 #-----------------------------------------------------------------------------
 # Magic implementation classes
@@ -420,7 +422,8 @@ class ExecutionMagics(Magics):
     )
     @no_var_expand
     @line_cell_magic
-    def debug(self, line='', cell=None):
+    @needs_local_scope
+    def debug(self, line="", cell=None, local_ns=None):
         """Activate the interactive debugger.
 
         This magic command support two ways of activating debugger.
@@ -451,7 +454,7 @@ class ExecutionMagics(Magics):
             self._debug_post_mortem()
         elif not (args.breakpoint or cell):
             # If there is no breakpoints, the line is just code to execute
-            self._debug_exec(line, None)
+            self._debug_exec(line, None, local_ns)
         else:
             # Here we try to reconstruct the code from the output of
             # parse_argstring. This might not work if the code has spaces
@@ -459,18 +462,20 @@ class ExecutionMagics(Magics):
             code = "\n".join(args.statement)
             if cell:
                 code += "\n" + cell
-            self._debug_exec(code, args.breakpoint)
+            self._debug_exec(code, args.breakpoint, local_ns)
 
     def _debug_post_mortem(self):
         self.shell.debugger(force=True)
 
-    def _debug_exec(self, code, breakpoint):
+    def _debug_exec(self, code, breakpoint, local_ns=None):
         if breakpoint:
             (filename, bp_line) = breakpoint.rsplit(':', 1)
             bp_line = int(bp_line)
         else:
             (filename, bp_line) = (None, None)
-        self._run_with_debugger(code, self.shell.user_ns, filename, bp_line)
+        self._run_with_debugger(
+            code, self.shell.user_ns, filename, bp_line, local_ns=local_ns
+        )
 
     @line_magic
     def tb(self, s):
@@ -865,8 +870,9 @@ class ExecutionMagics(Magics):
 
         return stats
 
-    def _run_with_debugger(self, code, code_ns, filename=None,
-                           bp_line=None, bp_file=None):
+    def _run_with_debugger(
+        self, code, code_ns, filename=None, bp_line=None, bp_file=None, local_ns=None
+    ):
         """
         Run `code` in debugger with a break point.
 
@@ -883,6 +889,8 @@ class ExecutionMagics(Magics):
         bp_file : str, optional
             Path to the file in which break point is specified.
             `filename` is used if not given.
+        local_ns : dict, optional
+            A local namespace in which `code` is executed.
 
         Raises
         ------
@@ -939,7 +947,7 @@ class ExecutionMagics(Magics):
             while True:
                 try:
                     trace = sys.gettrace()
-                    deb.run(code, code_ns)
+                    deb.run(code, code_ns, local_ns)
                 except Restart:
                     print("Restarting")
                     if filename:
@@ -1194,6 +1202,7 @@ class ExecutionMagics(Magics):
     @no_var_expand
     @needs_local_scope
     @line_cell_magic
+    @output_can_be_silenced
     def time(self,line='', cell=None, local_ns=None):
         """Time execution of a Python statement or expression.
 
@@ -1459,7 +1468,10 @@ class ExecutionMagics(Magics):
         disp = not args.no_display
         with capture_output(out, err, disp) as io:
             self.shell.run_cell(cell)
-        if args.output:
+        if DisplayHook.semicolon_at_end_of_expression(cell):
+            if args.output in self.shell.user_ns:
+                del self.shell.user_ns[args.output]
+        elif args.output:
             self.shell.user_ns[args.output] = io
 
 def parse_breakpoint(text, current_file):

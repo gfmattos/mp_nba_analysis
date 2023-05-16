@@ -1,7 +1,8 @@
 import re
 import tokenize
 from io import StringIO
-from typing import Callable, List, Optional, Union, Generator, Tuple, Sequence
+from typing import Callable, List, Optional, Union, Generator, Tuple
+import warnings
 
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.key_binding import KeyPressEvent
@@ -16,6 +17,7 @@ from prompt_toolkit.layout.processors import (
     TransformationInput,
 )
 
+from IPython.core.getipython import get_ipython
 from IPython.utils.tokenutil import generate_tokens
 
 
@@ -177,9 +179,8 @@ class NavigableAutoSuggestFromHistory(AutoSuggestFromHistory):
                     break
 
 
-# Needed for to accept autosuggestions in vi insert mode
-def accept_in_vi_insert_mode(event: KeyPressEvent):
-    """Apply autosuggestion if at end of line."""
+def accept_or_jump_to_end(event: KeyPressEvent):
+    """Apply autosuggestion or jump to end of line."""
     buffer = event.current_buffer
     d = buffer.document
     after_cursor = d.text[d.cursor_position :]
@@ -190,6 +191,15 @@ def accept_in_vi_insert_mode(event: KeyPressEvent):
         buffer.insert_text(suggestion.text)
     else:
         nc.end_of_line(event)
+
+
+def _deprected_accept_in_vi_insert_mode(event: KeyPressEvent):
+    """Accept autosuggestion or jump to end of line.
+
+    .. deprecated:: 8.12
+        Use `accept_or_jump_to_end` instead.
+    """
+    return accept_or_jump_to_end(event)
 
 
 def accept(event: KeyPressEvent):
@@ -251,14 +261,13 @@ def _update_hint(buffer: Buffer):
 
 def backspace_and_resume_hint(event: KeyPressEvent):
     """Resume autosuggestions after deleting last character"""
-    current_buffer = event.current_buffer
-
-    def resume_hinting(buffer: Buffer):
-        _update_hint(buffer)
-        current_buffer.on_text_changed.remove_handler(resume_hinting)
-
-    current_buffer.on_text_changed.add_handler(resume_hinting)
     nc.backward_delete_char(event)
+    _update_hint(event.current_buffer)
+
+
+def resume_hinting(event: KeyPressEvent):
+    """Resume autosuggestions"""
+    return _update_hint(event.current_buffer)
 
 
 def up_and_update_hint(event: KeyPressEvent):
@@ -346,33 +355,42 @@ def _swap_autosuggestion(
     buffer.suggestion = new_suggestion
 
 
-def swap_autosuggestion_up(provider: Provider):
-    def swap_autosuggestion_up(event: KeyPressEvent):
-        """Get next autosuggestion from history."""
-        if not isinstance(provider, NavigableAutoSuggestFromHistory):
-            return
+def swap_autosuggestion_up(event: KeyPressEvent):
+    """Get next autosuggestion from history."""
+    shell = get_ipython()
+    provider = shell.auto_suggest
 
-        return _swap_autosuggestion(
-            buffer=event.current_buffer, provider=provider, direction_method=provider.up
+    if not isinstance(provider, NavigableAutoSuggestFromHistory):
+        return
+
+    return _swap_autosuggestion(
+        buffer=event.current_buffer, provider=provider, direction_method=provider.up
+    )
+
+
+def swap_autosuggestion_down(event: KeyPressEvent):
+    """Get previous autosuggestion from history."""
+    shell = get_ipython()
+    provider = shell.auto_suggest
+
+    if not isinstance(provider, NavigableAutoSuggestFromHistory):
+        return
+
+    return _swap_autosuggestion(
+        buffer=event.current_buffer,
+        provider=provider,
+        direction_method=provider.down,
+    )
+
+
+def __getattr__(key):
+    if key == "accept_in_vi_insert_mode":
+        warnings.warn(
+            "`accept_in_vi_insert_mode` is deprecated since IPython 8.12 and "
+            "renamed to `accept_or_jump_to_end`. Please update your configuration "
+            "accordingly",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-    swap_autosuggestion_up.__name__ = "swap_autosuggestion_up"
-    return swap_autosuggestion_up
-
-
-def swap_autosuggestion_down(
-    provider: Union[AutoSuggestFromHistory, NavigableAutoSuggestFromHistory, None]
-):
-    def swap_autosuggestion_down(event: KeyPressEvent):
-        """Get previous autosuggestion from history."""
-        if not isinstance(provider, NavigableAutoSuggestFromHistory):
-            return
-
-        return _swap_autosuggestion(
-            buffer=event.current_buffer,
-            provider=provider,
-            direction_method=provider.down,
-        )
-
-    swap_autosuggestion_down.__name__ = "swap_autosuggestion_down"
-    return swap_autosuggestion_down
+        return _deprected_accept_in_vi_insert_mode
+    raise AttributeError
