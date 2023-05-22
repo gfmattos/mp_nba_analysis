@@ -1,24 +1,23 @@
 # mp_nba_analysis
-My Portifolio - EDA with Plotly Visualization
+My Portifolio - EDA | Power BI Dashboard
 
-## _Análise dos dados da NBA_
+## _Analysing NBA Data_
 
-### Tarefas
+> All information was taken from the nba_api from the swar repository on github, follow the link below for more instructions on using his amazing API.
 
-1. Inicializar um novo ambiente.
-2. Selecionar endpoints que trarão as informações desejadas.
-3. Fazer requisição para as APIs.
-4. Executar tratamento e organização dos dados.
-5. Produzir uma análise exploratória dos dados tratados.
-6. Gerar visualizações e insights.
-7. Inserir os resultados em uma apresentação simples para praticar Storytelling.
+https://github.com/swar/nba_api
+
 
 ---
 
-### ***Projeto em Desenvolvimento***
+### ***Work in Progress***
 
 ---
+ 
 
-**Etapa Atual**
-
-> 4. Criando funções para tratamento e organização dos dados que serão usados na análise
+**Research Questions**
+   - Existe alguma correlação de atributos físicos com performace? **(API Info ☑️)**
+   - Existem times com tendência a receberem mais All-Stars ou jogadores mais premiados? **(API Info ☑️)**
+   - Em relação ao Box Score existe alguma tendência de vitória ao ganhar determinados quartos? **(API Info ☑️)**
+   - Quais colleges produziram os jogadores mais premiados? **(API Info ☑️)**
+   - Explorar dados dos Raptors **(API Info ☑️)**
