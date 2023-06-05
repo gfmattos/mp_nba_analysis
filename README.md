@@ -10,14 +10,13 @@ https://github.com/swar/nba_api
 
 ---
 
-### ***Work in Progress***
+*The project ran up against an API call limitation. Therefore just the performance analysis has been made so far. This project is subject to further development in the near future Meanwhile, viewers of this repository are able to check three main files, listed below with the respective link.*
 
 ---
  
 
-**Research Questions**
-   - Existe alguma correlação de atributos físicos com performace? **(API Info ☑️)**
-   - Existem times com tendência a receberem mais All-Stars ou jogadores mais premiados? **(API Info ☑️)**
-   - Em relação ao Box Score existe alguma tendência de vitória ao ganhar determinados quartos? **(API Info ☑️)**
-   - Quais colleges produziram os jogadores mais premiados? **(API Info ☑️)**
-   - Explorar dados dos Raptors **(API Info ☑️)**
+File | Description
+-- | --
+[extract_data.ipynb](data\scripts\extract_data.ipynb) | Notebook file intended to build functions to scrap the data through API call
+[performance_analysis.ipynb](mp_\analysis\performance_analysis.ipynb) | Notebook file intended to gather all the data and build analysis with it
+[profile_dash](mp_\visualizations\profile_dash.pbix) | Power BI dashboard intended to visualize players' profiles and ratings
